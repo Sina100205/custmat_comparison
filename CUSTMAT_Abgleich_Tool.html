@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CUSTMAT Abgleich</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f8f8f6;
+    --surface: #ffffff;
+    --border: #e2e2de;
+    --border-strong: #c8c8c2;
+    --text-primary: #1a1a18;
+    --text-secondary: #6b6b65;
+    --text-muted: #9b9b94;
+    --blue: #1a56db;
+    --blue-bg: #eff4ff;
+    --blue-border: #c3d5fd;
+    --green: #057a55;
+    --green-bg: #f0fdf4;
+    --green-border: #a7f3d0;
+    --red: #c81e1e;
+    --red-bg: #fff5f5;
+    --red-border: #fecaca;
+    --amber-bg: #fffbeb;
+    --amber-border: #fde68a;
+    --amber-text: #92400e;
+    --orange: #c2410c;
+    --orange-bg: #fff7ed;
+    --orange-border: #fed7aa;
+    --radius: 8px;
+    --radius-lg: 12px;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text-primary); line-height: 1.6; min-height: 100vh; padding: 2rem 1rem 4rem; font-size: 15px; }
+  .container { max-width: 900px; margin: 0 auto; }
+  header { margin-bottom: 2.5rem; }
+  header h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.3px; }
+  header p { color: var(--text-secondary); font-size: 14px; margin-top: 4px; }
+
+  .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1.5rem; }
+  .drop-zone { border: 1.5px dashed var(--border-strong); border-radius: var(--radius-lg); background: var(--surface); padding: 1.5rem 1rem; text-align: center; cursor: pointer; transition: border-color 0.15s, background 0.15s; user-select: none; }
+  .drop-zone:hover, .drop-zone.over { border-color: var(--blue); background: var(--blue-bg); }
+  .drop-zone.loaded { border-color: var(--green); border-style: solid; background: var(--green-bg); }
+  .drop-icon { font-size: 28px; margin-bottom: 8px; }
+  .drop-title { font-size: 14px; font-weight: 600; }
+  .drop-sub { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+  .drop-zone.loaded .drop-sub { color: var(--green); font-weight: 500; }
+
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1.5rem; }
+  .stat-card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 1rem 1.1rem; display: flex; flex-direction: column; }
+  .stat-val { font-size: 24px; font-weight: 600; line-height: 1.1; }
+  .stat-val.green { color: var(--green); }
+  .stat-val.red { color: var(--red); }
+  .stat-val.orange { color: var(--orange); }
+  .stat-lbl { font-size: 12px; color: var(--text-secondary); margin-top: 4px; flex: 1; }
+  .stat-dl { display: none; margin-top: 10px; padding-top: 10px; border-top: 0.5px solid var(--border); }
+  .stat-dl.visible { display: block; }
+  .btn-stat { display: flex; align-items: center; gap: 5px; width: 100%; padding: 6px 10px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; border: 0.5px solid; transition: opacity 0.12s, transform 0.1s; justify-content: center; }
+  .btn-stat:active { transform: scale(0.97); }
+  .btn-stat-red { background: var(--red-bg); color: var(--red); border-color: var(--red-border); }
+  .btn-stat-red:hover { opacity: 0.8; }
+  .btn-stat-orange { background: var(--orange-bg); color: var(--orange); border-color: var(--orange-border); }
+  .btn-stat-orange:hover { opacity: 0.8; }
+
+  .tabs { display: flex; gap: 4px; border-bottom: 0.5px solid var(--border); margin-bottom: 1.25rem; }
+  .tab { padding: 8px 16px; font-size: 14px; font-weight: 500; cursor: pointer; border-bottom: 2px solid transparent; color: var(--text-secondary); transition: color 0.15s; background: none; border-top: none; border-left: none; border-right: none; }
+  .tab:hover { color: var(--text-primary); }
+  .tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+  .tab-count { display: inline-block; font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 99px; margin-left: 5px; background: var(--bg); }
+  .tab.active .tab-count { background: var(--blue-bg); color: var(--blue); }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .section { margin-bottom: 1.5rem; }
+  .section-title { font-size: 13px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+  .card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { text-align: left; font-weight: 600; font-size: 12px; color: var(--text-secondary); padding: 10px 12px; border-bottom: 0.5px solid var(--border); background: var(--bg); white-space: nowrap; }
+  tbody td { padding: 8px 12px; border-bottom: 0.5px solid var(--border); vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: var(--bg); }
+
+  .badge { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 99px; border: 0.5px solid; white-space: nowrap; }
+  .badge-amber { background: var(--amber-bg); color: var(--amber-text); border-color: var(--amber-border); }
+  .badge-orange { background: var(--orange-bg); color: var(--orange); border-color: var(--orange-border); }
+  .badge-red { background: var(--red-bg); color: var(--red); border-color: var(--red-border); }
+  .badge-blue { background: var(--blue-bg); color: var(--blue); border-color: var(--blue-border); }
+
+  .conflict-cell { background: var(--orange-bg); }
+  .conflict-diff { font-size: 11px; color: var(--text-secondary); display: block; margin-top: 2px; }
+  .conflict-diff span { font-weight: 600; }
+  .conflict-diff .old { color: var(--red); }
+  .conflict-diff .new { color: var(--green); }
+
+  .dl-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 1.25rem; }
+  .dl-hint { font-size: 13px; color: var(--text-secondary); }
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px; border-radius: var(--radius); font-size: 14px; font-weight: 500; cursor: pointer; border: 0.5px solid var(--border-strong); background: var(--surface); color: var(--text-primary); transition: background 0.12s, transform 0.1s; }
+  .btn:hover { background: var(--bg); }
+  .btn:active { transform: scale(0.98); }
+  .btn-primary { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .btn-primary:hover { opacity: 0.9; background: var(--blue); }
+  .btn-orange { background: var(--orange); color: #fff; border-color: var(--orange); }
+  .btn-orange:hover { opacity: 0.9; background: var(--orange); }
+
+  .notice { border-radius: var(--radius); padding: 10px 14px; font-size: 13px; margin-bottom: 1.25rem; }
+  .notice-green { background: var(--green-bg); border: 0.5px solid var(--green-border); color: var(--green); }
+  .notice-orange { background: var(--orange-bg); border: 0.5px solid var(--orange-border); color: var(--orange); }
+
+  .empty { text-align: center; padding: 3rem 1rem; color: var(--text-muted); font-size: 14px; }
+  .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
+  footer { margin-top: 3rem; font-size: 12px; color: var(--text-muted); text-align: center; }
+
+  @media (max-width: 620px) {
+    .upload-grid { grid-template-columns: 1fr; }
+    .stats-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <h1>CUSTMAT Abgleich</h1>
+    <p>Vergleicht BITZER Product IDs aus ZSD_VA05N mit ZSD_CUSTMAT — zeigt fehlende Einträge und Konflikte.</p>
+  </header>
+
+  <div class="upload-grid">
+    <div>
+      <div class="drop-zone" id="zone-cm" onclick="document.getElementById('inp-cm').click()" role="button" tabindex="0" aria-label="ZSD_CUSTMAT hochladen">
+        <div class="drop-icon">📋</div>
+        <div class="drop-title">ZSD_CUSTMAT</div>
+        <div class="drop-sub" id="sub-cm">Klicken oder Datei ablegen</div>
+      </div>
+      <input type="file" id="inp-cm" accept=".xlsx" style="display:none">
+    </div>
+    <div>
+      <div class="drop-zone" id="zone-va" onclick="document.getElementById('inp-va').click()" role="button" tabindex="0" aria-label="ZSD_VA05N hochladen">
+        <div class="drop-icon">📄</div>
+        <div class="drop-title">ZSD_VA05N</div>
+        <div class="drop-sub" id="sub-va">Klicken oder Datei ablegen</div>
+      </div>
+      <input type="file" id="inp-va" accept=".xlsx" style="display:none">
+    </div>
+  </div>
+
+  <div id="main-content" style="display:none;">
+
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-val" id="s-total">–</div><div class="stat-lbl">Zeilen in VA05N</div></div>
+      <div class="stat-card"><div class="stat-val green" id="s-found">–</div><div class="stat-lbl">Vorhanden &amp; korrekt</div></div>
+      <div class="stat-card">
+        <div class="stat-val red" id="s-miss">–</div>
+        <div class="stat-lbl">Fehlende Einträge</div>
+        <div class="stat-dl" id="dl-missing-card">
+          <button class="btn-stat btn-stat-red" onclick="downloadMissing()">⬇ Excel herunterladen</button>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val orange" id="s-conf">–</div>
+        <div class="stat-lbl">Konflikte</div>
+        <div class="stat-dl" id="dl-conflicts-card">
+          <button class="btn-stat btn-stat-orange" onclick="downloadConflicts()">⬇ Excel herunterladen</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="all-ok-notice" class="notice notice-green" style="display:none;">
+      ✓ Alle Einträge aus ZSD_VA05N sind in ZSD_CUSTMAT vorhanden und stimmen überein.
+    </div>
+
+    <div id="results-block">
+
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('missing')" id="tab-missing">
+          Fehlende Einträge <span class="tab-count" id="tc-missing">0</span>
+        </button>
+        <button class="tab" onclick="switchTab('conflicts')" id="tab-conflicts">
+          Konflikte <span class="tab-count" id="tc-conflicts">0</span>
+        </button>
+      </div>
+
+      <!-- TAB: FEHLENDE EINTRÄGE -->
+      <div class="tab-panel active" id="panel-missing">
+        <div id="missing-empty" class="notice notice-green" style="display:none;">✓ Keine fehlenden Einträge.</div>
+
+        <div id="missing-content">
+          <div class="section">
+            <div class="section-title">Cluster nach Kunde</div>
+            <div class="card">
+              <table>
+                <thead><tr><th>Sold-to Party</th><th>Name</th><th>Fehlende Einträge</th></tr></thead>
+                <tbody id="cluster-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Vorschau — erste 15 Einträge</div>
+            <div class="card" style="overflow-x:auto;">
+              <table>
+                <thead><tr>
+                  <th>Sales Org.</th><th>Dist. Ch.</th><th>Customer</th>
+                  <th>Material (BITZER Product ID)</th><th>Customer Material</th>
+                </tr></thead>
+                <tbody id="preview-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+
+        </div>
+      </div>
+
+      <!-- TAB: KONFLIKTE -->
+      <div class="tab-panel" id="panel-conflicts">
+        <div id="conflicts-empty" class="notice notice-green" style="display:none;">✓ Keine Konflikte — alle vorhandenen Einträge stimmen überein.</div>
+
+        <div id="conflicts-content">
+          <div id="conflict-notice" class="notice notice-orange" style="display:none;"></div>
+
+          <div class="section">
+            <div class="section-title">Konflikt-Übersicht</div>
+            <div class="card" style="overflow-x:auto;">
+              <table>
+                <thead><tr>
+                  <th>Sold-to Party</th><th>Name</th>
+                  <th>Material (BITZER Product ID)</th>
+                  <th>Sales Doc.</th><th>Item Description</th>
+                  <th>Customer Material (VA05N)</th>
+                  <th class="conflict-cell">Customer Material (CUSTMAT)</th>
+                  <th>Konflikt</th>
+                </tr></thead>
+                <tbody id="conflicts-body"></tbody>
+              </table>
+            </div>
+          </div>
+
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="empty" id="empty-hint">Bitte beide Dateien hochladen, um den Abgleich zu starten.</div>
+
+  <footer>Alle Daten werden lokal im Browser verarbeitet — keine Übertragung an externe Server.</footer>
+</div>
+
+<script>
+let cmData = null, vaData = null, missingRows = [], conflictRows = [];
+
+function norm(v) { return String(v == null ? '' : v).trim(); }
+
+function switchTab(name) {
+  ['missing','conflicts'].forEach(t => {
+    document.getElementById('tab-' + t).classList.toggle('active', t === name);
+    document.getElementById('panel-' + t).classList.toggle('active', t === name);
+  });
+}
+
+function markLoaded(id, filename) {
+  const z = document.getElementById('zone-' + id);
+  z.classList.add('loaded');
+  z.querySelector('.drop-title').textContent = filename.length > 22 ? filename.slice(0,20) + '…' : filename;
+  document.getElementById('sub-' + id).textContent = '✓ Geladen';
+}
+
+function readXLSX(file, cb) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    cb(XLSX.utils.sheet_to_json(ws, { defval: '' }));
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function runAnalysis() {
+  if (!cmData || !vaData) return;
+
+  // Build lookup: (customer, material) -> customer_material
+  const cmLookup = {};
+  cmData.forEach(r => {
+    const key = norm(r['Customer']) + '|' + norm(r['Material']);
+    // keep first occurrence (or could store all if dupes exist)
+    if (!cmLookup[key]) cmLookup[key] = norm(r['Customer Material']);
+  });
+
+  missingRows = [];
+  conflictRows = [];
+  let okCount = 0;
+
+  vaData.forEach(r => {
+    const key = norm(r['Sold-to Party']) + '|' + norm(r['BITZER Product ID']);
+    if (key in cmLookup) {
+      const cmCustMat = cmLookup[key];
+      const vaCustMat = norm(r['Customer Material']);
+      if (cmCustMat !== vaCustMat) {
+        conflictRows.push({ ...r, _cm_custmat: cmCustMat });
+      } else {
+        okCount++;
+      }
+    } else {
+      missingRows.push(r);
+    }
+  });
+
+  // Stats
+  document.getElementById('s-total').textContent = vaData.length;
+  document.getElementById('s-found').textContent = okCount;
+  document.getElementById('s-miss').textContent = missingRows.length;
+  document.getElementById('s-conf').textContent = conflictRows.length;
+  document.getElementById('dl-missing-card').classList.toggle('visible', missingRows.length > 0);
+  document.getElementById('dl-conflicts-card').classList.toggle('visible', conflictRows.length > 0);
+  document.getElementById('tc-missing').textContent = missingRows.length;
+  document.getElementById('tc-conflicts').textContent = conflictRows.length;
+
+  document.getElementById('empty-hint').style.display = 'none';
+  document.getElementById('main-content').style.display = 'block';
+
+  const allOk = missingRows.length === 0 && conflictRows.length === 0;
+  document.getElementById('all-ok-notice').style.display = allOk ? 'block' : 'none';
+  document.getElementById('results-block').style.display = allOk ? 'none' : 'block';
+  if (allOk) return;
+
+  renderMissing();
+  renderConflicts();
+}
+
+function renderMissing() {
+  const hasMissing = missingRows.length > 0;
+  document.getElementById('missing-empty').style.display = hasMissing ? 'none' : 'block';
+  document.getElementById('missing-content').style.display = hasMissing ? 'block' : 'none';
+  if (!hasMissing) return;
+
+  const sorted = [...missingRows].sort((a, b) => {
+    const so = norm(a['Sales Organization']).localeCompare(norm(b['Sales Organization']));
+    return so !== 0 ? so : norm(a['Sold-to Party']).localeCompare(norm(b['Sold-to Party']));
+  });
+
+  // Cluster
+  const cluster = {};
+  missingRows.forEach(r => {
+    const k = norm(r['Sold-to Party']);
+    if (!cluster[k]) cluster[k] = { name: norm(r['Name Deb.']), count: 0 };
+    cluster[k].count++;
+  });
+  const cbody = document.getElementById('cluster-body');
+  cbody.innerHTML = '';
+  Object.entries(cluster).sort((a,b) => b[1].count - a[1].count).forEach(([party, info]) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td class="mono">${party}</td><td>${info.name}</td><td><span class="badge badge-amber">${info.count}</span></td>`;
+    cbody.appendChild(tr);
+  });
+
+  // Preview
+  const pbody = document.getElementById('preview-body');
+  pbody.innerHTML = '';
+  sorted.slice(0, 15).forEach(r => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td class="mono">${norm(r['Sales Organization'])}</td><td class="mono">${norm(r['Distribution Channel'])}</td><td class="mono">${norm(r['Sold-to Party'])}</td><td class="mono">${norm(r['BITZER Product ID'])}</td><td>${norm(r['Customer Material'])}</td>`;
+    pbody.appendChild(tr);
+  });
+
+
+
+
+function renderConflicts() {
+  const hasConflicts = conflictRows.length > 0;
+  document.getElementById('conflicts-empty').style.display = hasConflicts ? 'none' : 'block';
+  document.getElementById('conflicts-content').style.display = hasConflicts ? 'block' : 'none';
+  if (!hasConflicts) return;
+
+  const notice = document.getElementById('conflict-notice');
+  notice.style.display = 'block';
+  notice.textContent = `⚠ ${conflictRows.length} Einträge sind in ZSD_CUSTMAT vorhanden, aber die Customer Material Nummer weicht ab.`;
+
+  const tbody = document.getElementById('conflicts-body');
+  tbody.innerHTML = '';
+  const sorted = [...conflictRows].sort((a,b) =>
+    norm(a['Sold-to Party']).localeCompare(norm(b['Sold-to Party']))
+  );
+
+  sorted.forEach(r => {
+    const va = norm(r['Customer Material']);
+    const cm = norm(r['_cm_custmat']);
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="mono">${norm(r['Sold-to Party'])}</td>
+      <td>${norm(r['Name Deb.'])}</td>
+      <td class="mono">${norm(r['BITZER Product ID'])}</td>
+      <td class="mono">${norm(r['Sales Document'])}</td>
+      <td style="max-width:180px;">${norm(r['Item Description'])}</td>
+      <td class="mono">${va}</td>
+      <td class="mono conflict-cell">${cm}</td>
+      <td><span class="badge badge-orange">Konflikt</span></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+
+}
+
+
+function buildMissingSheet() {
+  const sorted = [...missingRows].sort((a, b) => {
+    const so = norm(a['Sales Organization']).localeCompare(norm(b['Sales Organization']));
+    return so !== 0 ? so : norm(a['Sold-to Party']).localeCompare(norm(b['Sold-to Party']));
+  });
+  return sorted.map(r => ({
+    'Sales Organization':   norm(r['Sales Organization']),
+    'Distribution Channel': norm(r['Distribution Channel']),
+    'Customer':             norm(r['Sold-to Party']),
+    'Material':             norm(r['BITZER Product ID']),
+    'Customer Material':    norm(r['Customer Material']),
+    'Customer Description': '',
+    'Comment':              ''
+  }));
+}
+
+function buildConflictSheet() {
+  const sorted = [...conflictRows].sort((a,b) =>
+    norm(a['Sold-to Party']).localeCompare(norm(b['Sold-to Party']))
+  );
+  return sorted.map(r => ({
+    'Sold-to Party':              norm(r['Sold-to Party']),
+    'Name':                       norm(r['Name Deb.']),
+    'Sales Document':             norm(r['Sales Document']),
+    'Sales Organization':         norm(r['Sales Organization']),
+    'Distribution Channel':       norm(r['Distribution Channel']),
+    'Material (BITZER Product ID)': norm(r['BITZER Product ID']),
+    'Item Description':           norm(r['Item Description']),
+    'Customer Material (VA05N)':  norm(r['Customer Material']),
+    'Customer Material (CUSTMAT)': norm(r['_cm_custmat']),
+    'Konflikt':                   'Ja'
+  }));
+}
+
+function makeWb(sheets) {
+  const wb = XLSX.utils.book_new();
+  sheets.forEach(({ name, data, widths }) => {
+    const ws = XLSX.utils.json_to_sheet(data);
+    ws['!cols'] = widths.map(w => ({ wch: w }));
+    XLSX.utils.book_append_sheet(wb, ws, name);
+  });
+  return wb;
+}
+
+function downloadMissing() {
+  if (!missingRows.length) return;
+  const wb = makeWb([{
+    name: 'Neue Einträge (CUSTMAT Format)',
+    data: buildMissingSheet(),
+    widths: [18,22,12,14,22,30,20]
+  }]);
+  XLSX.writeFile(wb, 'ZSD_CUSTMAT_neue_Eintraege.xlsx');
+}
+
+function downloadConflicts() {
+  if (!conflictRows.length) return;
+  const wb = makeWb([{
+    name: 'Konflikte',
+    data: buildConflictSheet(),
+    widths: [14,30,14,18,18,24,35,24,25,10]
+  }]);
+  XLSX.writeFile(wb, 'ZSD_CUSTMAT_Konflikte.xlsx');
+}
+
+function setupZone(id, cb) {
+  const inp = document.getElementById('inp-' + id);
+  const zone = document.getElementById('zone-' + id);
+  inp.onchange = e => { if (e.target.files[0]) cb(e.target.files[0]); };
+  zone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') inp.click(); });
+  zone.ondragover = e => { e.preventDefault(); zone.classList.add('over'); };
+  zone.ondragleave = () => zone.classList.remove('over');
+  zone.ondrop = e => { e.preventDefault(); zone.classList.remove('over'); const f = e.dataTransfer.files[0]; if (f) cb(f); };
+}
+
+setupZone('cm', file => { markLoaded('cm', file.name); readXLSX(file, rows => { cmData = rows; runAnalysis(); }); });
+setupZone('va', file => { markLoaded('va', file.name); readXLSX(file, rows => { vaData = rows; runAnalysis(); }); });
+</script>
+</body>
+</html>
